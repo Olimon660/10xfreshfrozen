@@ -1,0 +1,399 @@
+---
+title: "NBID DEG"
+---
+
+```{r setup}
+library(NBID)
+library(MASS)
+library(pscl)
+library(nloptr)
+# source("./NBID.R")
+```
+
+```{r}
+D1A_FA3_THA = readRDS("../data/processed_counts/D1A_FA3_THA.rds")
+D1B_FA3_THA = readRDS("../data/processed_counts/D1B_FA3_THA.rds")
+D4X_FA2_FRE = readRDS("../data/processed_counts/D4X_FA2_FRE.rds")
+D4X_FA2_THA = readRDS("../data/processed_counts/D4X_FA2_THA.rds")
+D4X_FA3_FRE = readRDS("../data/processed_counts/D4X_FA3_FRE.rds")
+D4X_FA3_THA = readRDS("../data/processed_counts/D4X_FA3_THA.rds")
+```
+
+``` {r}
+# filter cells
+D1A_FA3_THA = D1A_FA3_THA[,colSums(D1A_FA3_THA)>=4000]
+D1A_FA3_THA = D1A_FA3_THA[,colSums(D1A_FA3_THA)<=40000]
+D1B_FA3_THA = D1B_FA3_THA[,colSums(D1B_FA3_THA)>=4000]
+D1B_FA3_THA = D1B_FA3_THA[,colSums(D1B_FA3_THA)<=40000]
+D4X_FA2_FRE = D4X_FA2_FRE[,colSums(D4X_FA2_FRE)>=4000]
+D4X_FA2_FRE = D4X_FA2_FRE[,colSums(D4X_FA2_FRE)<=40000]
+D4X_FA2_THA = D4X_FA2_THA[,colSums(D4X_FA2_THA)>=4000]
+D4X_FA2_THA = D4X_FA2_THA[,colSums(D4X_FA2_THA)<=40000]
+D4X_FA3_FRE = D4X_FA3_FRE[,colSums(D4X_FA3_FRE)>=4000]
+D4X_FA3_FRE = D4X_FA3_FRE[,colSums(D4X_FA3_FRE)<=40000]
+D4X_FA3_THA = D4X_FA3_THA[,colSums(D4X_FA3_THA)>=4000]
+D4X_FA3_THA = D4X_FA3_THA[,colSums(D4X_FA3_THA)<=40000]
+```
+
+# FA2
+```{r}
+min.counts = 0
+gene.list = Reduce(intersect,
+                   list(
+                   rownames(D1A_FA3_THA[rowSums(D1A_FA3_THA) > min.counts, ]),
+                   rownames(D1B_FA3_THA[rowSums(D1B_FA3_THA) > min.counts, ]),
+                   rownames(D4X_FA2_FRE[rowSums(D4X_FA2_FRE) > min.counts, ]),
+                   rownames(D4X_FA2_THA[rowSums(D4X_FA2_THA) > min.counts, ])
+                   ))
+```
+
+```{r}
+D1A_FA3_THA.filtered = D1A_FA3_THA[rownames(D1A_FA3_THA) %in% gene.list, ]
+D1B_FA3_THA.filtered = D1B_FA3_THA[rownames(D1B_FA3_THA) %in% gene.list, ]
+D4X_FA2_FRE.filtered = D4X_FA2_FRE[rownames(D4X_FA2_FRE) %in% gene.list, ]
+D4X_FA2_THA.filtered = D4X_FA2_THA[rownames(D4X_FA2_THA) %in% gene.list, ]
+```
+
+```{r}
+D4_FA2.data = cbind(
+  D4X_FA2_FRE.filtered,
+  D4X_FA2_THA.filtered,
+  D1A_FA3_THA.filtered,
+  D1B_FA3_THA.filtered
+)
+group_D4_FA2 = c(rep("FRESH", dim(D4X_FA2_FRE.filtered)[2]),
+                 rep(
+                 "FROZEN",
+                 dim(D4X_FA2_THA.filtered)[2] + dim(D1A_FA3_THA.filtered)[2] + dim(D1B_FA3_THA.filtered)[2]
+                 ))
+
+chip_groups = c(rep("chip2", dim(D4X_FA2_FRE.filtered)[2]),
+                rep("chip3", dim(D4X_FA2_THA.filtered)[2]),
+                rep("chip2", dim(D1A_FA3_THA.filtered)[2]),
+                rep("chip3", dim(D1B_FA3_THA.filtered)[2]))
+chip_groups = factor(chip_groups, as.character(unique(sort(chip_groups))))
+
+cell_lines = c(rep("FA2", dim(D4X_FA2_FRE.filtered)[2]+dim(D4X_FA2_THA.filtered)[2]),
+                rep("FA3", dim(D1A_FA3_THA.filtered)[2]+dim(D1B_FA3_THA.filtered)[2]))
+cell_lines = factor(cell_lines, as.character(unique(sort(cell_lines))))
+cov = cbind(chip_groups,cell_lines)
+```
+
+```{r}
+result = DEUsingNBID(D4_FA2.data, group_D4_FA2, covariates = cov, ncore = 22)
+```
+
+```{r}
+FDR = p.adjust(result[, "pvalue"], method = "BH")
+res_combind = cbind(FDR, result)
+res_combind = as.data.frame(res_combind)
+res_combind = res_combind[order(res_combind$FDR), ]
+saveRDS(res_combind, "../data/deg/D4_FA2.rds")
+res_combind = readRDS("../data/deg/D4_FA2.rds")
+```
+
+```{r}
+res_combind = readRDS("../data/deg/D4_FA2.rds")
+res_combind = res_combind[res_combind$FDR<1e-2,]
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+```
+
+```{r}
+res_combind[(res_combind$log2FCFROZEN<0),]
+```
+
+```{r}
+res_combind[(res_combind$log2FCFROZEN>0),]
+
+```
+
+```{r}
+# Make a basic volcano plot
+with(res_combind, plot(log2FCFROZEN, -log10(res_combind$pvalue), pch=20, main="Volcano plot", cex=0.3))
+
+# Add colored points: red if padj<0.05, orange of log2FC>1, green if both)
+with(subset(res_combind, FDR<1e-50), points(log2FCFROZEN, -log10(pvalue), pch=20, col="red", cex=0.3))
+with(subset(res_combind, abs(log2FCFROZEN)>1), points(log2FCFROZEN, -log10(pvalue), pch=20, col="orange", cex=0.3))
+with(subset(res_combind, FDR<1e-50 & abs(log2FCFROZEN)>1), points(log2FCFROZEN, -log10(pvalue), pch=20, col="green", cex=0.3))
+# 
+# # Label points with the textxy function from the calibrate plot
+# library(calibrate)
+# with(subset(res, padj<.05 & abs(log2FoldChange)>1), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=.8))
+
+```
+
+# FA2 Highly expressed genes
+```{r}
+min.counts = 500
+gene.list = Reduce(intersect,
+                   list(
+                   rownames(D1A_FA3_THA[rowSums(D1A_FA3_THA) > min.counts, ]),
+                   rownames(D1B_FA3_THA[rowSums(D1B_FA3_THA) > min.counts, ]),
+                   rownames(D4X_FA2_FRE[rowSums(D4X_FA2_FRE) > min.counts, ]),
+                   rownames(D4X_FA2_THA[rowSums(D4X_FA2_THA) > min.counts, ])
+                   ))
+```
+
+```{r}
+D1A_FA3_THA.filtered = D1A_FA3_THA[rownames(D1A_FA3_THA) %in% gene.list, ]
+D1B_FA3_THA.filtered = D1B_FA3_THA[rownames(D1B_FA3_THA) %in% gene.list, ]
+D4X_FA2_FRE.filtered = D4X_FA2_FRE[rownames(D4X_FA2_FRE) %in% gene.list, ]
+D4X_FA2_THA.filtered = D4X_FA2_THA[rownames(D4X_FA2_THA) %in% gene.list, ]
+```
+
+```{r}
+D4_FA2.data = cbind(
+  D4X_FA2_FRE.filtered,
+  D4X_FA2_THA.filtered,
+  D1A_FA3_THA.filtered,
+  D1B_FA3_THA.filtered
+)
+group_D4_FA2 = c(rep("FRESH", dim(D4X_FA2_FRE.filtered)[2]),
+                 rep(
+                 "FROZEN",
+                 dim(D4X_FA2_THA.filtered)[2] + dim(D1A_FA3_THA.filtered)[2] + dim(D1B_FA3_THA.filtered)[2]
+                 ))
+
+chip_groups = c(rep("chip2", dim(D4X_FA2_FRE.filtered)[2]),
+                rep("chip3", dim(D4X_FA2_THA.filtered)[2]),
+                rep("chip2", dim(D1A_FA3_THA.filtered)[2]),
+                rep("chip3", dim(D1B_FA3_THA.filtered)[2]))
+chip_groups = factor(chip_groups, as.character(unique(sort(chip_groups))))
+
+cell_lines = c(rep("FA2", dim(D4X_FA2_FRE.filtered)[2]+dim(D4X_FA2_THA.filtered)[2]),
+                rep("FA3", dim(D1A_FA3_THA.filtered)[2]+dim(D1B_FA3_THA.filtered)[2]))
+cell_lines = factor(cell_lines, as.character(unique(sort(cell_lines))))
+cov = cbind(chip_groups,cell_lines)
+```
+
+```{r}
+result = DEUsingNBID(D4_FA2.data, group_D4_FA2, covariates = cov, ncore = 22)
+```
+
+```{r}
+FDR = p.adjust(result[, "pvalue"], method = "BH")
+res_combind = cbind(FDR, result)
+res_combind = as.data.frame(res_combind)
+res_combind = res_combind[order(res_combind$FDR), ]
+saveRDS(res_combind, "../data/deg/D4_FA2_min500.rds")
+res_combind = readRDS("../data/deg/D4_FA2_min500.rds")
+```
+
+```{r}
+res_combind = readRDS("../data/deg/D4_FA2_min500.rds")
+write.table(res_combind, "../data/deg/D4_FA2_min500.tsv", sep = "\t")
+
+res_combind = res_combind[res_combind$FDR<1e-2,]
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+```
+
+```{r}
+res_combind[(res_combind$log2FCFROZEN<0),]
+```
+
+```{r}
+res_combind[(res_combind$log2FCFROZEN>0),]
+
+```
+
+```{r}
+# Make a basic volcano plot
+with(res_combind, plot(log2FCFROZEN, -log10(res_combind$pvalue), pch=20, main="Volcano plot", cex=0.3))
+
+# Add colored points: red if padj<0.05, orange of log2FC>1, green if both)
+with(subset(res_combind, FDR<1e-50), points(log2FCFROZEN, -log10(pvalue), pch=20, col="red", cex=0.3))
+with(subset(res_combind, abs(log2FCFROZEN)>1), points(log2FCFROZEN, -log10(pvalue), pch=20, col="orange", cex=0.3))
+with(subset(res_combind, FDR<1e-50 & abs(log2FCFROZEN)>1), points(log2FCFROZEN, -log10(pvalue), pch=20, col="green", cex=0.3))
+# 
+# # Label points with the textxy function from the calibrate plot
+# library(calibrate)
+# with(subset(res, padj<.05 & abs(log2FoldChange)>1), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=.8))
+
+```
+
+# FA3
+```{r}
+min.counts = 0
+gene.list = Reduce(intersect,
+                   list(
+                   rownames(D1A_FA3_THA[rowSums(D1A_FA3_THA) > min.counts, ]),
+                   rownames(D1B_FA3_THA[rowSums(D1B_FA3_THA) > min.counts, ]),
+                   rownames(D4X_FA3_FRE[rowSums(D4X_FA3_FRE) > min.counts, ]),
+                   rownames(D4X_FA3_THA[rowSums(D4X_FA3_THA) > min.counts, ])
+                   ))
+```
+
+```{r}
+D1A_FA3_THA.filtered = D1A_FA3_THA[rownames(D1A_FA3_THA) %in% gene.list, ]
+D1B_FA3_THA.filtered = D1B_FA3_THA[rownames(D1B_FA3_THA) %in% gene.list, ]
+D4X_FA3_FRE.filtered = D4X_FA3_FRE[rownames(D4X_FA3_FRE) %in% gene.list, ]
+D4X_FA3_THA.filtered = D4X_FA3_THA[rownames(D4X_FA3_THA) %in% gene.list, ]
+```
+
+```{r}
+D4_FA3.data = cbind(
+  D4X_FA3_FRE.filtered,
+  D4X_FA3_THA.filtered,
+  D1A_FA3_THA.filtered,
+  D1B_FA3_THA.filtered
+)
+group_D4_FA3 = c(rep("FRESH", dim(D4X_FA3_FRE.filtered)[2]),
+                 rep(
+                 "FROZEN",
+                 dim(D4X_FA3_THA.filtered)[2] + dim(D1A_FA3_THA.filtered)[2] + dim(D1B_FA3_THA.filtered)[2]
+                 ))
+
+chip_groups = c(rep("chip2", dim(D4X_FA3_FRE.filtered)[2]),
+                rep("chip3", dim(D4X_FA3_THA.filtered)[2]),
+                rep("chip2", dim(D1A_FA3_THA.filtered)[2]),
+                rep("chip3", dim(D1B_FA3_THA.filtered)[2]))
+chip_groups = factor(chip_groups, as.character(unique(sort(chip_groups))))
+
+cell_lines = c(rep("D4_FA3", dim(D4X_FA3_FRE.filtered)[2]+dim(D4X_FA3_THA.filtered)[2]),
+                rep("D1_FA3", dim(D1A_FA3_THA.filtered)[2]+dim(D1B_FA3_THA.filtered)[2]))
+cell_lines = factor(cell_lines, as.character(unique(sort(cell_lines))))
+cov = cbind(chip_groups,cell_lines)
+```
+
+```{r}
+result = DEUsingNBID(D4_FA3.data, group_D4_FA3, covariates = cov, ncore = 22)
+```
+
+```{r}
+FDR = p.adjust(result[, "pvalue"], method = "BH")
+res_combind = cbind(FDR, result)
+
+res_combind = as.data.frame(res_combind)
+res_combind = res_combind[order(res_combind$FDR), ]
+saveRDS(res_combind, "../data/deg/D4_FA3.rds")
+res_combind = readRDS("../data/deg/D4_FA3.rds")
+write.table(res_combind, "../data/deg/D4_FA3.tsv", sep="\t")
+```
+
+```{r}
+res_combind = readRDS("../data/deg/D4_FA3.rds")
+write.table(res_combind, "../data/deg/D4_FA3.tsv", sep = "\t")
+
+res_combind = res_combind[res_combind$FDR<1e-2,]
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+```
+
+```{r}
+res_combind[(res_combind$log2FCFROZEN<0),]
+```
+
+```{r}
+res_combind[(res_combind$log2FCFROZEN>0),]
+
+```
+
+```{r}
+# Make a basic volcano plot
+with(res_combind, plot(log2FCFROZEN, -log10(res_combind$pvalue), pch=20, main="Volcano plot", cex=0.3))
+
+# Add colored points: red if padj<0.05, orange of log2FC>1, green if both)
+with(subset(res_combind, FDR<1e-50), points(log2FCFROZEN, -log10(pvalue), pch=20, col="red", cex=0.3))
+with(subset(res_combind, abs(log2FCFROZEN)>1), points(log2FCFROZEN, -log10(pvalue), pch=20, col="orange", cex=0.3))
+with(subset(res_combind, FDR<1e-50 & abs(log2FCFROZEN)>1), points(log2FCFROZEN, -log10(pvalue), pch=20, col="green", cex=0.3))
+# 
+# # Label points with the textxy function from the calibrate plot
+# library(calibrate)
+# with(subset(res, padj<.05 & abs(log2FoldChange)>1), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=.8))
+
+```
+
+# FA3 Highly expressed genes
+```{r}
+min.counts = 500
+gene.list = Reduce(intersect,
+                   list(
+                   rownames(D1A_FA3_THA[rowSums(D1A_FA3_THA) > min.counts, ]),
+                   rownames(D1B_FA3_THA[rowSums(D1B_FA3_THA) > min.counts, ]),
+                   rownames(D4X_FA3_FRE[rowSums(D4X_FA3_FRE) > min.counts, ]),
+                   rownames(D4X_FA3_THA[rowSums(D4X_FA3_THA) > min.counts, ])
+                   ))
+```
+
+```{r}
+D1A_FA3_THA.filtered = D1A_FA3_THA[rownames(D1A_FA3_THA) %in% gene.list, ]
+D1B_FA3_THA.filtered = D1B_FA3_THA[rownames(D1B_FA3_THA) %in% gene.list, ]
+D4X_FA3_FRE.filtered = D4X_FA3_FRE[rownames(D4X_FA3_FRE) %in% gene.list, ]
+D4X_FA3_THA.filtered = D4X_FA3_THA[rownames(D4X_FA3_THA) %in% gene.list, ]
+```
+
+```{r}
+D4_FA3.data = cbind(
+  D4X_FA3_FRE.filtered,
+  D4X_FA3_THA.filtered,
+  D1A_FA3_THA.filtered,
+  D1B_FA3_THA.filtered
+)
+group_D4_FA3 = c(rep("FRESH", dim(D4X_FA3_FRE.filtered)[2]),
+                 rep(
+                 "FROZEN",
+                 dim(D4X_FA3_THA.filtered)[2] + dim(D1A_FA3_THA.filtered)[2] + dim(D1B_FA3_THA.filtered)[2]
+                 ))
+
+chip_groups = c(rep("chip2", dim(D4X_FA3_FRE.filtered)[2]),
+                rep("chip3", dim(D4X_FA3_THA.filtered)[2]),
+                rep("chip2", dim(D1A_FA3_THA.filtered)[2]),
+                rep("chip3", dim(D1B_FA3_THA.filtered)[2]))
+chip_groups = factor(chip_groups, as.character(unique(sort(chip_groups))))
+
+cell_lines = c(rep("D4_FA3", dim(D4X_FA3_FRE.filtered)[2]+dim(D4X_FA3_THA.filtered)[2]),
+                rep("D1_FA3", dim(D1A_FA3_THA.filtered)[2]+dim(D1B_FA3_THA.filtered)[2]))
+cell_lines = factor(cell_lines, as.character(unique(sort(cell_lines))))
+cov = cbind(chip_groups,cell_lines)
+```
+
+```{r}
+result = DEUsingNBID(D4_FA3.data, group_D4_FA3, covariates = cov, ncore = 22)
+```
+
+```{r}
+FDR = p.adjust(result[, "pvalue"], method = "BH")
+res_combind = cbind(FDR, result)
+res_combind = as.data.frame(res_combind)
+res_combind = res_combind[order(res_combind$FDR), ]
+saveRDS(res_combind, "../data/deg/D4_FA3_min500.rds")
+res_combind = readRDS("../data/deg/D4_FA3_min500.rds")
+write.table(res_combind, "../data/deg/D4_FA3_min500.tsv", sep = "\t")
+```
+
+```{r}
+res_combind = readRDS("../data/deg/D4_FA3_min500.rds")
+res_combind = res_combind[res_combind$FDR<1e-2,]
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+```
+
+```{r}
+res_combind[(res_combind$log2FCFROZEN<0),]
+```
+
+```{r}
+res_combind[(res_combind$log2FCFROZEN>0),]
+
+```
+
+```{r}
+# Make a basic volcano plot
+with(res_combind, plot(log2FCFROZEN, -log10(res_combind$pvalue), pch=20, main="Volcano plot", cex=0.3))
+
+# Add colored points: red if padj<0.05, orange of log2FC>1, green if both)
+with(subset(res_combind, FDR<1e-50), points(log2FCFROZEN, -log10(pvalue), pch=20, col="red", cex=0.3))
+with(subset(res_combind, abs(log2FCFROZEN)>1), points(log2FCFROZEN, -log10(pvalue), pch=20, col="orange", cex=0.3))
+with(subset(res_combind, FDR<1e-50 & abs(log2FCFROZEN)>1), points(log2FCFROZEN, -log10(pvalue), pch=20, col="green", cex=0.3))
+# 
+# # Label points with the textxy function from the calibrate plot
+# library(calibrate)
+# with(subset(res, padj<.05 & abs(log2FoldChange)>1), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=.8))
+
+```

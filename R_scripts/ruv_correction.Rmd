@@ -1,0 +1,98 @@
+---
+title: "RUV correction"
+---
+
+```{r setup}
+library(ruv)
+
+```
+
+```{r}
+D1A_FA3_THA = read.csv("../data/processed_counts/D1A_FA3_THA_S6_COUNT.csv", row.names = 1)
+D1B_FA3_THA = read.csv("../data/processed_counts/D1B_FA3_THA_S7_COUNT.csv", row.names = 1)
+D1X_FA2_FRE = read.csv("../data/processed_counts/D1X_FA2_FRE_S1_COUNT.csv", row.names = 1)
+D1X_FA2_THA = read.csv("../data/processed_counts/D1X_FA2_THA_S5_COUNT.csv", row.names = 1)
+D1X_FA3_FRE = read.csv("../data/processed_counts/D1X_FA3_FRE_S2_COUNT.csv", row.names = 1)
+D4X_FA2_FRE = read.csv("../data/processed_counts/D4X_FA2_FRE_S3_COUNT.csv", row.names = 1)
+D4X_FA2_THA = read.csv("../data/processed_counts/D4X_FA2_THA_S8_COUNT.csv", row.names = 1)
+D4X_FA3_FRE = read.csv("../data/processed_counts/D4X_FA3_FRE_S4_COUNT.csv", row.names = 1)
+D4X_FA3_THA = read.csv("../data/processed_counts/D4X_FA3_THA_S9_COUNT.csv", row.names = 1)
+D0X_FA2_REP = read.csv("../data/processed_counts/D0X_FA2_REP_S10_COUNT.csv", row.names = 1)
+
+```
+
+```{r}
+saveRDS(D1A_FA3_THA, "../data/processed_counts/D1A_FA3_THA.rds")
+saveRDS(D1B_FA3_THA, "../data/processed_counts/D1B_FA3_THA.rds")
+saveRDS(D1X_FA2_FRE, "../data/processed_counts/D1X_FA2_FRE.rds")
+saveRDS(D1X_FA2_THA, "../data/processed_counts/D1X_FA2_THA.rds")
+saveRDS(D1X_FA3_FRE, "../data/processed_counts/D1X_FA3_FRE.rds")
+saveRDS(D4X_FA2_FRE, "../data/processed_counts/D4X_FA2_FRE.rds")
+saveRDS(D4X_FA2_THA, "../data/processed_counts/D4X_FA2_THA.rds")
+saveRDS(D4X_FA3_FRE, "../data/processed_counts/D4X_FA3_FRE.rds")
+saveRDS(D4X_FA3_THA, "../data/processed_counts/D4X_FA3_THA.rds")
+saveRDS(D0X_FA2_REP, "../data/processed_counts/D0X_FA2_REP.rds")
+```
+
+```{r}
+D1A_FA3_THA = readRDS("../data/processed_counts/D1A_FA3_THA.rds")
+D1B_FA3_THA = readRDS("../data/processed_counts/D1B_FA3_THA.rds")
+D1X_FA2_FRE = readRDS("../data/processed_counts/D1X_FA2_FRE.rds")
+D1X_FA2_THA = readRDS("../data/processed_counts/D1X_FA2_THA.rds")
+D1X_FA3_FRE = readRDS("../data/processed_counts/D1X_FA3_FRE.rds")
+D4X_FA2_FRE = readRDS("../data/processed_counts/D4X_FA2_FRE.rds")
+D4X_FA2_THA = readRDS("../data/processed_counts/D4X_FA2_THA.rds")
+D4X_FA3_FRE = readRDS("../data/processed_counts/D4X_FA3_FRE.rds")
+D4X_FA3_THA = readRDS("../data/processed_counts/D4X_FA3_THA.rds")
+D0X_FA2_REP = readRDS("../data/processed_counts/D0X_FA2_REP.rds")
+```
+
+```{r}
+gene.list = Reduce(intersect,
+                   list(
+                   rownames(D1A_FA3_THA[rowSums(D1A_FA3_THA) > 0, ]),
+                   rownames(D1B_FA3_THA[rowSums(D1B_FA3_THA) > 0, ]),
+                   rownames(D4X_FA2_FRE[rowSums(D1X_FA2_FRE) > 0, ]),
+                   rownames(D4X_FA2_THA[rowSums(D1X_FA2_THA) > 0, ])
+                   ))
+```
+
+```{r}
+D1A_FA3_THA.filtered = D1A_FA3_THA[rownames(D1A_FA3_THA) %in% gene.list, ]
+D1B_FA3_THA.filtered = D1B_FA3_THA[rownames(D1B_FA3_THA) %in% gene.list, ]
+D4X_FA2_FRE.filtered = D4X_FA2_FRE[rownames(D4X_FA2_FRE) %in% gene.list, ]
+D4X_FA2_THA.filtered = D4X_FA2_THA[rownames(D4X_FA2_THA) %in% gene.list, ]
+```
+
+```{r}
+D4_FA2.data = cbind(
+  D4X_FA2_FRE.filtered,
+  D4X_FA2_THA.filtered,
+  D1A_FA3_THA.filtered,
+  D1B_FA3_THA.filtered
+)
+D4_FA2.data = t(D4_FA2.data)
+
+D4_FA2_M = as.matrix(cbind(c(rep(1, dim(D4X_FA2_FRE.filtered)[2]),
+                 rep(0, dim(D4X_FA2_THA.filtered)[2]) ,
+                 rep(0, (
+                 dim(D1A_FA3_THA.filtered)[2] + dim(D1B_FA3_THA.filtered)[2]
+                 ))),
+                 c(rep(0, dim(D4X_FA2_FRE.filtered)[2]),
+                 rep(1, dim(D4X_FA2_THA.filtered)[2]) ,
+                 rep(0, (
+                 dim(D1A_FA3_THA.filtered)[2] + dim(D1B_FA3_THA.filtered)[2]
+                 ))),
+                 c(rep(0, dim(D4X_FA2_FRE.filtered)[2]),
+                 rep(0, dim(D4X_FA2_THA.filtered)[2]) ,
+                 rep(1, (
+                 dim(D1A_FA3_THA.filtered)[2] + dim(D1B_FA3_THA.filtered)[2]
+                 )))))
+control_genes = rep(TRUE, dim(D4_FA2.data)[2])
+```
+
+```{r}
+res = RUVIII(D4_FA2.data, D4_FA2_M, control_genes)
+```
+
+

@@ -1,0 +1,222 @@
+---
+title: "Clustering Analysis"
+---
+
+```{r setup}
+library(ggplot2)
+library(cowplot)
+sc.integrated = readRDS("../data/seurat/sc.integrated.rds")
+```
+
+```{r}
+sc.integrated <- ScaleData(sc.integrated, verbose = FALSE)
+sc.integrated <- RunPCA(sc.integrated, npcs = 30, verbose = FALSE)
+sc.integrated <- RunUMAP(sc.integrated, reduction = "pca", dims = 1:30)
+
+```
+
+```{r fig.width=10, fig.height=4}
+p1 <-
+  DimPlot(
+  sc.integrated[, sc.integrated$isFrozen=="FRESH"],
+  reduction = "umap",
+  group.by = "day",
+  pt.size=0.01
+  )
+p1 = p1 + ggtitle("FRESH")
+
+p2 <-
+  DimPlot(sc.integrated[, sc.integrated$isFrozen=="FROZEN"], reduction = "umap",pt.size=0.01, group.by = "day")
+p2 = p2 + ggtitle("FROZEN")
+
+plot_grid(p1, p2)
+```
+
+```{r fig.width=10, fig.height=4}
+p1 <-
+  DimPlot(
+  sc.integrated[, (sc.integrated$isFrozen == "FROZEN" &
+  grepl("^D1", sc.integrated$sample))],
+  reduction = "umap",
+  group.by = "sample",
+  pt.size=0.05,
+  order = c("D1A_FA3_THA")
+  )
+p1 = p1 + ggtitle("D1_FROZEN")
+
+p2 <-
+  DimPlot(sc.integrated[, (sc.integrated$isFrozen == "FRESH" &
+  grepl("^D1", sc.integrated$sample))], reduction = "umap",pt.size=0.05, group.by = "sample")
+p2 = p2 + ggtitle("D1_FRESH")
+
+plot_grid(p1, p2)
+```
+
+```{r fig.width=10, fig.height=4}
+p1 <-
+  DimPlot(
+  sc.integrated[, (sc.integrated$isFrozen == "FROZEN" &
+  grepl("^D4", sc.integrated$sample))],
+  reduction = "umap",
+  group.by = "sample",
+  pt.size=0.05
+  )
+p1 = p1 + ggtitle("D4_FROZEN")
+
+p2 <-
+  DimPlot(sc.integrated[, (sc.integrated$isFrozen == "FRESH" &
+  grepl("^D4", sc.integrated$sample))], reduction = "umap",pt.size=0.05, group.by = "sample")
+p2 = p2 + ggtitle("D4_FRESH")
+
+plot_grid(p1, p2)
+```
+
+
+
+```{r fig.width=10, fig.height=4}
+p1 <-
+  FeaturePlot(
+  sc.integrated[, (sc.integrated$isFrozen == "FRESH" &
+  grepl("^D4X_FA2", sc.integrated$sample))],
+  reduction = "umap",
+  features = c("MIXL1"),
+  pt.size=0.05
+  )
+
+p2 <-
+  FeaturePlot(
+  sc.integrated[, (sc.integrated$isFrozen == "FRESH" &
+  grepl("^D4X_FA3", sc.integrated$sample))],
+  reduction = "umap",
+  features = c("MIXL1"),
+  pt.size=0.05
+  )
+plot_grid(p1, p2)
+```
+
+
+```{r fig.width=10, fig.height=4}
+a <-
+  DimPlot(
+  sc.integrated[, (grepl("^D1X_FA2", sc.integrated$sample))],
+  reduction = "umap",
+  group.by = "sample",
+  pt.size=0.01
+  )
+a = a + ggtitle("D1_FA2")
+
+b <-
+  DimPlot(sc.integrated[, (grepl("^D1.*_FA3", sc.integrated$sample))], reduction = "umap",pt.size=0.01, group.by = "sample",
+  order = c("D1A_FA3_THA"))
+b = b + ggtitle("D1_FA3")
+plot_grid(a, b)
+```
+
+```{r fig.width=10, fig.height=4}
+p1 <-
+  DimPlot(
+  sc.integrated[, (grepl("^D4X_FA2", sc.integrated$sample))],
+  reduction = "umap",
+  group.by = "sample",
+  pt.size=0.01
+  )
+p1 = p1 + ggtitle("D4_FA2")
+
+p2 <-
+  DimPlot(sc.integrated[, (grepl("^D4X_FA3", sc.integrated$sample))], reduction = "umap",pt.size=0.01, group.by = "sample",
+  order = c("D4X_FA3_THA"))
+p2 = p2 + ggtitle("D4_FA3")
+
+plot_grid(p1, p2)
+```
+
+```{r fig.width=10, fig.height=4}
+RidgePlot(sc.integrated, features = c("MIXL1", "LHX1"), ncol = 2, group.by = "sample")
+```
+
+
+# clustering
+
+```{r fig.width=10, fig.height=4}
+sc.integrated.D1.FA2 <- FindNeighbors(sc.integrated[, (grepl("^D1X_FA2", sc.integrated$sample))], dims = 1:10)
+sc.integrated.D1.FA2 <- FindClusters(sc.integrated.D1.FA2, resolution = 0.5)
+sc.integrated.D1.FA2 <- RunUMAP(sc.integrated.D1.FA2, dims = 1:10)
+sc.integrated.D1.FA2 <- RunTSNE(sc.integrated.D1.FA2)
+
+a = DimPlot(sc.integrated.D1.FA2[,sc.integrated.D1.FA2$sample=="D1X_FA2_FRE"], reduction = "umap")
+a = a + ggtitle("D1X_FA2_FRE")
+b = DimPlot(sc.integrated.D1.FA2[,sc.integrated.D1.FA2$sample=="D1X_FA2_THA"], reduction = "umap", title="D1X_FA2_THA")
+b = b + ggtitle("D1X_FA2_THA")
+plot_grid(a,b)
+
+a = DimPlot(sc.integrated.D1.FA2[,sc.integrated.D1.FA2$sample=="D1X_FA2_FRE"], reduction = "tsne")
+a = a + ggtitle("D1X_FA2_FRE")
+b = DimPlot(sc.integrated.D1.FA2[,sc.integrated.D1.FA2$sample=="D1X_FA2_THA"], reduction = "tsne", title="D1X_FA2_THA")
+b = b + ggtitle("D1X_FA2_THA")
+plot_grid(a,b)
+```
+
+```{r fig.width=10, fig.height=4}
+sc.integrated.D1.FA3 <- FindNeighbors(sc.integrated[, (grepl("^D1.*_FA3", sc.integrated$sample))], dims = 1:10)
+sc.integrated.D1.FA3 <- FindClusters(sc.integrated.D1.FA3, resolution = 0.5)
+sc.integrated.D1.FA3 <- RunUMAP(sc.integrated.D1.FA3, dims = 1:10)
+sc.integrated.D1.FA3 <- RunTSNE(sc.integrated.D1.FA3, dims = 1:10)
+
+a = DimPlot(sc.integrated.D1.FA3[,sc.integrated.D1.FA3$sample=="D1X_FA3_FRE"], reduction = "umap")
+a = a + ggtitle("D1X_FA3_FRE")
+b = DimPlot(sc.integrated.D1.FA3[,sc.integrated.D1.FA3$sample=="D1A_FA3_THA"], reduction = "umap", title="D1X_FA3_THA")
+b = b + ggtitle("D1A_FA3_THA")
+plot_grid(a,b)
+
+a = DimPlot(sc.integrated.D1.FA3[,sc.integrated.D1.FA3$sample=="D1X_FA3_FRE"], reduction = "tsne")
+a = a + ggtitle("D1X_FA3_FRE")
+b = DimPlot(sc.integrated.D1.FA3[,sc.integrated.D1.FA3$sample=="D1A_FA3_THA"], reduction = "tsne", title="D1X_FA3_THA")
+b = b + ggtitle("D1A_FA3_THA")
+plot_grid(a,b)
+```
+
+```{r fig.width=10, fig.height=4}
+sc.integrated.D4.FA2 <- FindNeighbors(sc.integrated[, (grepl("^D4X_FA2", sc.integrated$sample))], dims = 1:10)
+sc.integrated.D4.FA2 <- FindClusters(sc.integrated.D4.FA2, resolution = 0.5)
+sc.integrated.D4.FA2 <- RunUMAP(sc.integrated.D4.FA2, dims = 1:10)
+sc.integrated.D4.FA2 <- RunTSNE(sc.integrated.D4.FA2)
+
+a = DimPlot(sc.integrated.D4.FA2[,sc.integrated.D4.FA2$sample=="D4X_FA2_FRE"], reduction = "umap")
+a = a + ggtitle("D4X_FA2_FRE")
+b = DimPlot(sc.integrated.D4.FA2[,sc.integrated.D4.FA2$sample=="D4X_FA2_THA"], reduction = "umap", title="D4X_FA2_THA")
+b = b + ggtitle("D4X_FA2_THA")
+plot_grid(a,b)
+
+a = DimPlot(sc.integrated.D4.FA2[,sc.integrated.D4.FA2$sample=="D4X_FA2_FRE"], reduction = "tsne")
+a = a + ggtitle("D4X_FA2_FRE")
+b = DimPlot(sc.integrated.D4.FA2[,sc.integrated.D4.FA2$sample=="D4X_FA2_THA"], reduction = "tsne", title="D4X_FA2_THA")
+b = b + ggtitle("D4X_FA2_THA")
+plot_grid(a,b)
+```
+
+
+
+```{r fig.width=10, fig.height=4}
+sc.integrated.D4.FA3 <- FindNeighbors(sc.integrated[, (grepl("^D4X_FA3", sc.integrated$sample))], dims = 1:10)
+sc.integrated.D4.FA3 <- FindClusters(sc.integrated.D4.FA3, resolution = 0.5)
+sc.integrated.D4.FA3 <- RunUMAP(sc.integrated.D4.FA3, dims = 1:10)
+sc.integrated.D4.FA3 <- RunTSNE(sc.integrated.D4.FA3)
+
+
+a = DimPlot(sc.integrated.D4.FA3[,sc.integrated.D4.FA3$sample=="D4X_FA3_FRE"], reduction = "umap")
+a = a + ggtitle("D4X_FA3_FRE")
+b = DimPlot(sc.integrated.D4.FA3[,sc.integrated.D4.FA3$sample=="D4X_FA3_THA"], reduction = "umap", title="D4X_FA3_THA")
+b = b + ggtitle("D4X_FA3_THA")
+plot_grid(a,b)
+
+a = DimPlot(sc.integrated.D4.FA3[,sc.integrated.D4.FA3$sample=="D4X_FA3_FRE"], reduction = "tsne")
+a = a + ggtitle("D4X_FA3_FRE")
+b = DimPlot(sc.integrated.D4.FA3[,sc.integrated.D4.FA3$sample=="D4X_FA3_THA"], reduction = "tsne", title="D4X_FA3_THA")
+b = b + ggtitle("D4X_FA3_THA")
+plot_grid(a,b)
+```
+
+
+
+
+

@@ -1,0 +1,305 @@
+---
+title: "NBID DEG Fresh D1 vs D4 FA2 and FA3"
+---
+
+```{r setup}
+library(NBID)
+library(MASS)
+library(pscl)
+library(nloptr)
+# source("./NBID.R")
+```
+
+```{r}
+D1X_FA2_FRE = readRDS("../data/processed_counts/D1X_FA2_FRE.rds")
+D1X_FA3_FRE = readRDS("../data/processed_counts/D1X_FA3_FRE.rds")
+D4X_FA2_FRE = readRDS("../data/processed_counts/D4X_FA2_FRE.rds")
+D4X_FA3_FRE = readRDS("../data/processed_counts/D4X_FA3_FRE.rds")
+```
+
+```{r}
+# filter cells
+D1X_FA2_FRE = D1X_FA2_FRE[,colSums(D1X_FA2_FRE)>=4000]
+D1X_FA2_FRE = D1X_FA2_FRE[,colSums(D1X_FA2_FRE)<=40000]
+D1X_FA3_FRE = D1X_FA3_FRE[,colSums(D1X_FA3_FRE)>=4000]
+D1X_FA3_FRE = D1X_FA3_FRE[,colSums(D1X_FA3_FRE)<=40000]
+D4X_FA2_FRE = D4X_FA2_FRE[,colSums(D4X_FA2_FRE)>=4000]
+D4X_FA2_FRE = D4X_FA2_FRE[,colSums(D4X_FA2_FRE)<=40000]
+D4X_FA3_FRE = D4X_FA3_FRE[,colSums(D4X_FA3_FRE)>=4000]
+D4X_FA3_FRE = D4X_FA3_FRE[,colSums(D4X_FA3_FRE)<=40000]
+```
+
+#FA2 D1 vs D4
+```{r}
+min.counts = 0
+gene.list = Reduce(union,
+                   list(
+                     rownames(D1X_FA2_FRE[rowSums(D1X_FA2_FRE) > min.counts, ]),
+                   rownames(D4X_FA2_FRE[rowSums(D4X_FA2_FRE) > min.counts, ])
+                   ))
+```
+
+```{r}
+D1X_FA2_FRE.filtered = D1X_FA2_FRE[rownames(D1X_FA2_FRE) %in% gene.list, ]
+D4X_FA2_FRE.filtered = D4X_FA2_FRE[rownames(D4X_FA2_FRE) %in% gene.list, ]
+```
+
+```{r}
+FRE_FA2.data.nocontrol = cbind(
+  D1X_FA2_FRE.filtered,
+  D4X_FA2_FRE.filtered
+)
+group_FRE_FA2_no_control = c(rep("D1FA2FRESH", dim(D1X_FA2_FRE.filtered)[2]),
+                            rep("D4FA2FRESH",
+                            dim(D4X_FA2_FRE.filtered)[2]))
+```
+
+```{r}
+result = DEUsingNBID(FRE_FA2.data.nocontrol, group_FRE_FA2_no_control, ncore = 22)
+```
+
+```{r}
+FDR = p.adjust(result[, "pvalue"], method = "BH")
+res_combind = cbind(FDR, result)
+res_combind = as.data.frame(res_combind)
+res_combind = res_combind[order(res_combind$FDR), ]
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+saveRDS(res_combind, "../data/deg/D1D4_FRE_FA2_nocontrol.rds")
+write.table(res_combind, "../data/deg/D1D4_FRE_FA2_nocontrol.tsv", sep = "\t")
+
+```
+
+```{r}
+res_combind = readRDS("../data/deg/D1D4_FRE_FA2_nocontrol.rds")
+
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+
+res_combind[(res_combind$log2FCD4FA2FRESH < -10),]$log2FCD4FA2FRESH = -10
+res_combind[(res_combind$log2FCD4FA2FRESH > 10),]$log2FCD4FA2FRESH = 10
+```
+
+
+```{r}
+# Make a basic volcano plot
+with(res_combind, plot(log2FCD4FA2FRESH, -log10(res_combind$pvalue), pch=20, main="Volcano plot", cex=0.7))
+
+# Add colored points: red if padj<0.05, orange of log2FC>1, green if both)
+with(subset(res_combind, FDR<1e-50), points(log2FCD4FA2FRESH, -log10(pvalue), pch=20, col="red", cex=0.7))
+with(subset(res_combind, abs(log2FCD4FA2FRESH)>1), points(log2FCD4FA2FRESH, -log10(pvalue), pch=20, col="orange", cex=0.7))
+with(subset(res_combind, FDR<1e-50 & abs(log2FCD4FA2FRESH)>1), points(log2FCD4FA2FRESH, -log10(pvalue), pch=20, col="green", cex=0.7))
+
+# # Label points with the textxy function from the calibrate plot
+# library(calibrate)
+# with(subset(res, padj<.05 & abs(log2FoldChange)>1), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=.8))
+
+```
+
+
+# FA2 Highly expressed genes
+```{r}
+min.counts = 500
+gene.list = Reduce(union,
+                   list(
+                     rownames(D1X_FA2_FRE[rowSums(D1X_FA2_FRE) > min.counts, ]),
+                   rownames(D4X_FA2_FRE[rowSums(D4X_FA2_FRE) > min.counts, ])
+                   ))
+```
+
+```{r}
+D1X_FA2_FRE.filtered = D1X_FA2_FRE[rownames(D1X_FA2_FRE) %in% gene.list, ]
+D4X_FA2_FRE.filtered = D4X_FA2_FRE[rownames(D4X_FA2_FRE) %in% gene.list, ]
+```
+
+```{r}
+FRE_FA2.data.nocontrol = cbind(
+  D1X_FA2_FRE.filtered,
+  D4X_FA2_FRE.filtered
+)
+group_FRE_FA2_no_control = c(rep("D1FA2FRESH", dim(D1X_FA2_FRE.filtered)[2]),
+                            rep("D4FA2FRESH",
+                            dim(D4X_FA2_FRE.filtered)[2]))
+```
+
+```{r}
+result = DEUsingNBID(FRE_FA2.data.nocontrol, group_FRE_FA2_no_control, ncore = 22)
+```
+
+```{r}
+FDR = p.adjust(result[, "pvalue"], method = "BH")
+res_combind = cbind(FDR, result)
+res_combind = as.data.frame(res_combind)
+res_combind = res_combind[order(res_combind$FDR), ]
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+saveRDS(res_combind, "../data/deg/D1D4_FRE_FA2_min500_nocontrol.rds")
+write.table(res_combind, "../data/deg/D1D4_FRE_FA2_min500_nocontrol.tsv", sep = "\t")
+```
+
+```{r}
+res_combind = readRDS("../data/deg/D1D4_FRE_FA2_min500_nocontrol.rds")
+res_combind = res_combind[res_combind$FDR<5e-2,]
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+res_combind[(res_combind$log2FCD4FA2FRESH < -10),]$log2FCD4FA2FRESH = -10
+res_combind[(res_combind$log2FCD4FA2FRESH > 10),]$log2FCD4FA2FRESH = 10
+```
+
+```{r}
+# Make a basic volcano plot
+with(res_combind, plot(log2FCD4FA2FRESH, -log10(res_combind$pvalue), pch=20, main="Volcano plot", cex=0.7))
+
+# Add colored points: red if padj<0.05, orange of log2FC>1, green if both)
+with(subset(res_combind, FDR<1e-50), points(log2FCD4FA2FRESH, -log10(pvalue), pch=20, col="red", cex=0.7))
+with(subset(res_combind, abs(log2FCD4FA2FRESH)>1), points(log2FCD4FA2FRESH, -log10(pvalue), pch=20, col="orange", cex=0.7))
+with(subset(res_combind, FDR<1e-50 & abs(log2FCD4FA2FRESH)>1), points(log2FCD4FA2FRESH, -log10(pvalue), pch=20, col="green", cex=0.7))
+
+# # Label points with the textxy function from the calibrate plot
+# library(calibrate)
+# with(subset(res, padj<.05 & abs(log2FoldChange)>1), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=.8))
+
+```
+
+
+# FA3
+
+#FA3 D1 vs D4
+```{r}
+min.counts = 0
+gene.list = Reduce(union,
+                   list(
+                     rownames(D1X_FA3_FRE[rowSums(D1X_FA3_FRE) > min.counts, ]),
+                   rownames(D4X_FA3_FRE[rowSums(D4X_FA3_FRE) > min.counts, ])
+                   ))
+```
+
+```{r}
+D1X_FA3_FRE.filtered = D1X_FA3_FRE[rownames(D1X_FA3_FRE) %in% gene.list, ]
+D4X_FA3_FRE.filtered = D4X_FA3_FRE[rownames(D4X_FA3_FRE) %in% gene.list, ]
+```
+
+```{r}
+FRE_FA3.data.nocontrol = cbind(
+  D1X_FA3_FRE.filtered,
+  D4X_FA3_FRE.filtered
+)
+group_FRE_FA3_no_control = c(rep("D1FA3FRESH", dim(D1X_FA3_FRE.filtered)[2]),
+                            rep("D4FA3FRESH",
+                            dim(D4X_FA3_FRE.filtered)[2]))
+```
+
+```{r}
+result = DEUsingNBID(FRE_FA3.data.nocontrol, group_FRE_FA3_no_control, ncore = 22)
+```
+
+```{r}
+FDR = p.adjust(result[, "pvalue"], method = "BH")
+res_combind = cbind(FDR, result)
+res_combind = as.data.frame(res_combind)
+res_combind = res_combind[order(res_combind$FDR), ]
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+saveRDS(res_combind, "../data/deg/D1D4_FRE_FA3_nocontrol.rds")
+write.table(res_combind, "../data/deg/D1D4_FRE_FA3_nocontrol.tsv", sep = "\t")
+
+```
+
+```{r}
+res_combind = readRDS("../data/deg/D1D4_FRE_FA3_nocontrol.rds")
+
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+
+res_combind[(res_combind$log2FCD4FA3FRESH < -10),]$log2FCD4FA3FRESH = -10
+res_combind[(res_combind$log2FCD4FA3FRESH > 10),]$log2FCD4FA3FRESH = 10
+```
+
+
+```{r}
+# Make a basic volcano plot
+with(res_combind, plot(log2FCD4FA3FRESH, -log10(res_combind$pvalue), pch=20, main="Volcano plot", cex=0.7))
+
+# Add colored points: red if padj<0.05, orange of log2FC>1, green if both)
+with(subset(res_combind, FDR<1e-50), points(log2FCD4FA3FRESH, -log10(pvalue), pch=20, col="red", cex=0.7))
+with(subset(res_combind, abs(log2FCD4FA3FRESH)>1), points(log2FCD4FA3FRESH, -log10(pvalue), pch=20, col="orange", cex=0.7))
+with(subset(res_combind, FDR<1e-50 & abs(log2FCD4FA3FRESH)>1), points(log2FCD4FA3FRESH, -log10(pvalue), pch=20, col="green", cex=0.7))
+
+# # Label points with the textxy function from the calibrate plot
+# library(calibrate)
+# with(subset(res, padj<.05 & abs(log2FoldChange)>1), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=.8))
+
+```
+
+
+# FA3 Highly expressed genes
+```{r}
+min.counts = 500
+gene.list = Reduce(union,
+                   list(
+                     rownames(D1X_FA3_FRE[rowSums(D1X_FA3_FRE) > min.counts, ]),
+                   rownames(D4X_FA3_FRE[rowSums(D4X_FA3_FRE) > min.counts, ])
+                   ))
+```
+
+```{r}
+D1X_FA3_FRE.filtered = D1X_FA3_FRE[rownames(D1X_FA3_FRE) %in% gene.list, ]
+D4X_FA3_FRE.filtered = D4X_FA3_FRE[rownames(D4X_FA3_FRE) %in% gene.list, ]
+```
+
+```{r}
+FRE_FA3.data.nocontrol = cbind(
+  D1X_FA3_FRE.filtered,
+  D4X_FA3_FRE.filtered
+)
+group_FRE_FA3_no_control = c(rep("D1FA3FRESH", dim(D1X_FA3_FRE.filtered)[2]),
+                            rep("D4FA3FRESH",
+                            dim(D4X_FA3_FRE.filtered)[2]))
+```
+
+```{r}
+result = DEUsingNBID(FRE_FA3.data.nocontrol, group_FRE_FA3_no_control, ncore = 22)
+```
+
+```{r}
+FDR = p.adjust(result[, "pvalue"], method = "BH")
+res_combind = cbind(FDR, result)
+res_combind = as.data.frame(res_combind)
+res_combind = res_combind[order(res_combind$FDR), ]
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+saveRDS(res_combind, "../data/deg/D1D4_FRE_FA3_min500_nocontrol.rds")
+write.table(res_combind, "../data/deg/D1D4_FRE_FA3_min500_nocontrol.tsv", sep = "\t")
+```
+
+```{r}
+res_combind = readRDS("../data/deg/D1D4_FRE_FA3_min500_nocontrol.rds")
+res_combind = res_combind[res_combind$FDR<5e-2,]
+res_combind = res_combind[!grepl("^RPS", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^RPL", rownames(res_combind)),]
+res_combind = res_combind[!grepl("^MT", rownames(res_combind)),]
+res_combind[(res_combind$log2FCD4FA3FRESH < -10),]$log2FCD4FA3FRESH = -10
+res_combind[(res_combind$log2FCD4FA3FRESH > 10),]$log2FCD4FA3FRESH = 10
+```
+
+```{r}
+# Make a basic volcano plot
+with(res_combind, plot(log2FCD4FA3FRESH, -log10(res_combind$pvalue), pch=20, main="Volcano plot", cex=0.7))
+
+# Add colored points: red if padj<0.05, orange of log2FC>1, green if both)
+with(subset(res_combind, FDR<1e-50), points(log2FCD4FA3FRESH, -log10(pvalue), pch=20, col="red", cex=0.7))
+with(subset(res_combind, abs(log2FCD4FA3FRESH)>1), points(log2FCD4FA3FRESH, -log10(pvalue), pch=20, col="orange", cex=0.7))
+with(subset(res_combind, FDR<1e-50 & abs(log2FCD4FA3FRESH)>1), points(log2FCD4FA3FRESH, -log10(pvalue), pch=20, col="green", cex=0.7))
+
+# # Label points with the textxy function from the calibrate plot
+# library(calibrate)
+# with(subset(res, padj<.05 & abs(log2FoldChange)>1), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=.8))
+
+```
